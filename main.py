@@ -18,7 +18,7 @@ def one_hot_encoding(labels_dimension):
 
 def normalize_image(image_matrix=[]): #Normalize image matrix with values between 0 and 1
     image = image_matrix.reshape(28, 28)
-    image = np.fliplr(np.fliplr(image.T))
+    image = image.T
     return np.array(image) / 255
 
 class EMNISTHandler:
@@ -86,3 +86,5 @@ class EMNISTHandler:
             plt.show()
 
 emnist = EMNISTHandler(data_path='./matlab/emnist-balanced.mat',mapping_label_path='./matlab/emnist-balanced-mapping.txt')
+
+print(emnist.display_sample_images(5))

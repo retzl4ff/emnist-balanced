@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Flatten
+from keras.models import Sequential
+from keras.layers import Dense, Flatten
+from keras.callbacks import TensorBoard
 
 from scipy.io import loadmat
 
@@ -15,11 +16,14 @@ def one_hot_encoding(labels, num_classes=47):
 
     return np.array(one_hot_labels)
 
+def normalize_image(image_matrix):  #Normalize image matrix with values between 0 and 1
+    new_images = []
+    for image in image_matrix:
+        image = image.reshape(28, 28)
+        image = image.T
+        new_images.append(np.array(image) / 255)
 
-def normalize_image(image_matrix): #Normalize image matrix with values between 0 and 1
-    image = image_matrix.reshape(28, 28)
-    image = image.T
-    return np.array(image) / 255
+    return np.array(new_images)
 
 class NeuralNetwork:
     def __init__(self, data_path, mapping_label_path): #Initialize variables and call load functions
@@ -30,10 +34,11 @@ class NeuralNetwork:
         self.images_labels = []
         self.shuffled_images = []
         self.shuffled_labels = []
-        self._load_data()
-        # self._load_mapping()
+        self.model = self.build_model()
+        self._train_model()
 
-    def _load_data(self): #Load the dataset layer with images and labels
+
+    def _train_model(self): #Load the dataset layer with images and labels
         data = loadmat(self.data_path)
         images_matrix = data['dataset'][0][0][0][0][0][0]
         images_labels = data['dataset'][0][0][0][0][0][1]
@@ -41,10 +46,26 @@ class NeuralNetwork:
         self.images_labels = images_labels
 
         self.shuffled_images, self.shuffled_labels = self._shuffle_data(images_matrix, images_labels)
-        (train_images, train_labels), (validation_images, validation_labels), (test_images, test_labels) = self._split_data(self.shuffled_images, self.shuffled_labels)
-        y_train_encoded = one_hot_encoding(train_labels)
-        y_validation_encoded = one_hot_encoding(validation_labels)
-        y_test_encoded = one_hot_encoding(test_labels)
+        (x_train, y_train), (x_validation, y_validation), (x_test, y_test) = self._split_data(self.shuffled_images, self.shuffled_labels)
+        x_train = normalize_image(x_train)
+        x_validation = normalize_image(x_validation)
+        x_test = normalize_image(x_test)
+        y_train_encoded = one_hot_encoding(y_train)
+        y_validation_encoded = one_hot_encoding(y_validation)
+        y_test_encoded = one_hot_encoding(y_test)
+
+        tensorboard_callback = TensorBoard(log_dir="./logs", histogram_freq=1, write_images=True)
+
+        self.model.fit(
+            x_train,
+            y_train_encoded,
+            epochs=20,
+            batch_size=32,
+            validation_data=(x_validation, y_validation_encoded),
+            callbacks=[tensorboard_callback]
+        )
+
+        self.model.evaluate(x_test, y_test_encoded)
 
 
     """
@@ -55,12 +76,14 @@ class NeuralNetwork:
                 self.label_mapping[int(label)] = chr(int(ascii_code))
     """
 
+
     def _shuffle_data(self, images_matrix, images_labels):
         new_indexes = np.random.permutation(len(images_matrix))
         shuffled_images = images_matrix[new_indexes]
         shuffled_labels = images_labels[new_indexes]
         return np.array(shuffled_images), np.array(shuffled_labels)
     
+
     def _split_data(self, shuffled_images, shuffled_labels, train_size=0.8, validation_size=0.1):
         total_size = len(shuffled_images)
 
@@ -90,6 +113,7 @@ class NeuralNetwork:
             plt.axis('off')
             plt.show()
 
+
     def build_model(self):
         model = Sequential([
             Flatten(input_shape=(28, 28)),
@@ -97,4 +121,12 @@ class NeuralNetwork:
             Dense(47, activation='softmax')
         ])
 
-emnist = NeuralNetwork(data_path='./matlab/emnist-balanced.mat',mapping_label_path='./matlab/emnist-balanced-mapping.txt')
+        model.compile(
+            optimizer='adam',
+            loss='categorical_crossentropy',
+            metrics=['accuracy']
+        )
+
+        return model
+
+emnist = NeuralNetwork(data_path='./matlab/emnist-balanced.mat', mapping_label_path='./matlab/emnist-balanced-mapping.txt')
